@@ -1,6 +1,5 @@
 {
   "cleanUrls": true,
-  "redirects": [],
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
