@@ -119,13 +119,23 @@ var SP = [
   "## 4点確認（基本属性）",
   "年齢 / 年収 / 家族構成 / 住まい（持ち家or賃貸。持ち家ならローン残債も）。文章から読み取れれば値を入れ、無ければ null。",
   "",
+  "## 見込み見極め（prospect）",
+  "会話のやり取りから、この相手が「信用できる見込み客」か「要注意人物」かを客観的に見極める。口先ではなく、実際の言動・態度から判断する。",
+  "ポジティブ指標（見込みが立つ）: 会話が噛み合う（質問にちゃんと回答が返る）／約束を守る・時間を守る／断りの理由が明確で合理的／対等に話せる／嘘をつかない／素直／逃げない。",
+  "レッドフラグ（要注意）: 口では良いことばかり言うが中身が無い（「いいですね」「やりたいです」だけで具体が無い）／曖昧な返答（「まぁそうですね」「まぁはい」）／約束を破る・時間を守らない・約束への責任感が無い／「時間がない」「お金がない」を言い訳に使う／断りや会話が不自然・不合理／前後の説明に矛盾がある／客観的に誠実性・信用性に疑義がある。",
+  "- verdict: 「見込みあり」「グレー」「要注意」の3段階で判定。",
+  "- positives: 会話で確認できたポジティブ指標を、相手の発言を引用して列挙（無ければ空配列）。",
+  "- red_flags: 検知したレッドフラグを配列で。各項目は { flag: 何を検知したか, evidence: 根拠になる相手の発言の引用, drill: 確認電話での掘り下げアクション } の形。",
+  "  drill は必ず具体的な一歩踏み込む質問・行動にする。例: 「いいと思います」だけで中身が無い→「『どの辺をいいと感じましたか？』『正直、今の優先順位で10段階だとどのくらい？』と中身を具体化させる」。曖昧返答→「『やる・やらないで言うとどちらに近いですか？』と二択で踏ませる」。約束を濁す→「『では◯日◯時で、と相手の口から日時を言わせ、カレンダーに入れてもらう』」。矛盾→「◯◯と△△が食い違う点を確認電話で本人にそのまま確認する」。",
+  "  verdictが「見込みあり」でレッドフラグが無ければ red_flags は空配列でよい。グレー・要注意の場合は必ず1つ以上、掘り下げアクション付きで挙げる。",
+  "",
   "## 総評",
   "- needs_neck: ニーズ（needs）とネック（neck）を相手の言葉ベースで一言ずつ。judgmentで「ニーズ大・ネック小か」を一言。",
   "- top_priority: 確認電話で最優先に潰すべき1点。",
   "- summary: 3〜4文の総評。" + (SHACHO_LENS ? "最後の1文だけ、佐伯社長の視点（合理・論理・裏読み。曖昧表現や御用聞きを嫌う）で鋭く刺す。" : ""),
   "",
   "## 出力形式（JSONのみ。前置き・マークダウン・コードフェンス禁止）",
-  '{ "four_points": { "age": null, "income": null, "family": null, "housing": null }, "axes": [ { "key": "human", "covered": "good|partial|missing", "done": ["相手の言葉の引用"], "reinforce": ["確認電話でやること"] } ], "needs_neck": { "needs": "", "neck": "", "judgment": "" }, "top_priority": "", "summary": "" }',
+  '{ "four_points": { "age": null, "income": null, "family": null, "housing": null }, "axes": [ { "key": "human", "covered": "good|partial|missing", "done": ["相手の言葉の引用"], "reinforce": ["確認電話でやること"] } ], "prospect": { "verdict": "見込みあり|グレー|要注意", "positives": ["相手の発言の引用"], "red_flags": [ { "flag": "", "evidence": "", "drill": "" } ] }, "needs_neck": { "needs": "", "neck": "", "judgment": "" }, "top_priority": "", "summary": "" }',
   "axes は human, need, status, compare, estate, frame, stone の7つすべてを必ずこの順で返す。"
 ].join("\\n");
 
@@ -214,6 +224,34 @@ function render(r){
     if(rein.length){ for(var y=0;y<rein.length;y++){ h += '<div class="chip reinforce">'+esc(rein[y])+'</div>'; } }
     else { h += '<div class="empty">— なし</div>'; }
     h += '</div></div></div>';
+  }
+
+  var pr = r.prospect || {};
+  if(pr.verdict || (pr.positives && pr.positives.length) || (pr.red_flags && pr.red_flags.length)){
+    h += secTitle("見込み見極め");
+    var vd = pr.verdict || "";
+    var vcol = vd==="見込みあり" ? "var(--done)" : (vd==="要注意" ? "var(--missing)" : "var(--gold)");
+    var vbg  = vd==="見込みあり" ? "var(--done-bg)" : (vd==="要注意" ? "var(--missing-bg)" : "var(--reinforce-bg)");
+    h += '<div class="summary-card" style="margin-bottom:28px;">';
+    if(vd){ h += '<div style="display:inline-block;font-weight:800;font-size:15px;color:'+vcol+';background:'+vbg+';border:1px solid '+vcol+';border-radius:8px;padding:4px 14px;margin-bottom:14px;">'+esc(vd)+'</div>'; }
+    var pos = pr.positives || [];
+    if(pos.length){
+      h += '<div class="col-label" style="color:var(--done);">◎ 信用できるサイン</div>';
+      for(var pi=0;pi<pos.length;pi++){ h += '<div class="chip done">'+esc(pos[pi])+'</div>'; }
+    }
+    var rf = pr.red_flags || [];
+    if(rf.length){
+      h += '<div class="col-label" style="color:var(--missing);margin-top:12px;">⚠ 要注意サインと掘り下げ方</div>';
+      for(var ri=0;ri<rf.length;ri++){
+        var f = rf[ri] || {};
+        h += '<div style="border:1px solid var(--missing);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--missing-bg);">';
+        if(f.flag){ h += '<div style="font-weight:700;font-size:13px;color:var(--missing);">'+esc(f.flag)+'</div>'; }
+        if(f.evidence){ h += '<div style="font-size:12px;color:var(--ink-soft);margin-top:3px;">相手の発言:「'+esc(f.evidence)+'」</div>'; }
+        if(f.drill){ h += '<div style="font-size:13px;margin-top:6px;line-height:1.6;"><span style="font-weight:700;">→ 確認電話で:</span> '+esc(f.drill)+'</div>'; }
+        h += '</div>';
+      }
+    }
+    h += '</div>';
   }
 
   h += secTitle("総評");
